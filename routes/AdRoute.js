@@ -5,17 +5,17 @@ const Ad = require("../models/Ad");
 const Favorites = require("../models/Favorites")
 const user = require("../models/User");
 const fs = require('fs');
-const verifyToken = require('../utils/token');
+const verifyToken = require('../services/token');
 const router = express.Router();
-const Upload = require('../utils/multer');
-const upload = require("../utils/cloudinary");
-const audioUpload = require("../utils/audioupload");
+const Upload = require('../services/multer');
+const upload = require("../services/cloudinary");
+const audioUpload = require("../services/audioupload");
 const vm = require("v-response");
 const _ = require("underscore");
 const jwt = require('jsonwebtoken');
 const { nextTick } = require('process');
 const Location = require('../models/location');
-const Notification = require('../utils/notification');
+const Notification = require('../services/notification');
 const geocoder = NodeGeocoder({
   provider: 'openstreetmap',
 });
@@ -99,7 +99,7 @@ router.post("/create/:idlocation", Upload.fields([
     return res.status(201).json({ ad_id: savedAd._id, status: true });
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ message: 'Internal server error' });
+    return res.status(500).json({ message: error });
   }
 }
 )
@@ -107,16 +107,28 @@ router.post("/create/:idlocation", Upload.fields([
 
 
 //get ads
-router.get("/get", async (req, res) => {
+router.get('/get', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
     const searchQuery = req.headers.searchquery;
     const categoryId = req.headers.categoryid;
     const subcategoryId = req.headers.subcategoryid;
     const locationId = req.headers.locationid;
+    const radius = req.headers.radius;
+    const page = parseInt(req.query.page) || 1; // Extract the page parameter from the query string
+    console.log('page === ', page);
+
+    const pageSize = 20; // Number of ads per page
+
+    console.log('searchQuery === ', searchQuery);
+    console.log('categoryId === ', categoryId);
+    console.log('subcategoryId === ', subcategoryId);
+    console.log('locationId === ', locationId);
+    console.log('radius === ', radius);
+
     let idUser = '';
     const filter = { state: true };
-    const sort = { addedDate: -1 };
+    const sort = { createdAt: -1 };
     let coords = [];
     let favoriteAds = [];
     let city = '';
@@ -126,26 +138,28 @@ router.get("/get", async (req, res) => {
         const token = authHeader && authHeader.split(' ')[1];
         const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
         idUser = decodedToken.id;
-        const existingUser = await user.findOne({ _id: idUser });;
-        coords = [+existingUser.lng, +existingUser.lat];
+        const existingUser = await user.findOne({ _id: idUser });
+        coords = [parseFloat(existingUser.lng), parseFloat(existingUser.lat)];
         city = existingUser.city;
       } catch (error) {
         console.log(error);
       }
     }
-    console.log(idUser);
-    console.log('rabouuuuuuuuuuukkkkkkkkkkkkkk');
 
     if (locationId) {
-      const existingLocation = await Location.findById(locationId);
+      console.log(locationId);
+      const existingLocation = await Location.findById(locationId).lean();
+      console.log(existingLocation);
       coords = [+existingLocation.lng, +existingLocation.lat];
-      city = existingUser.city; // Note: existingUser might not be available if the token is expired or invalid
+      console.log(coords);
     }
 
-    if (categoryId) {
+    if (categoryId !== 'null' && categoryId && categoryId !== 'undefined') {
+      console.log(categoryId);
       filter.categoryId = categoryId;
-      if (subcategoryId) {
-        filter.subcategoryId = subcategoryId;
+      if (subcategoryId !== 'null' && subcategoryId && subcategoryId !== 'undefined') {
+        console.log(subcategoryId);
+        filter.subCategoryId = subcategoryId;
       }
     }
 
@@ -164,58 +178,91 @@ router.get("/get", async (req, res) => {
       }
     }
 
+    console.log(coords);
 
-    let ads = await Ad.find(filter)
-      .sort(sort)
-      .limit(20);
+    let ads = await Ad.find(filter).sort(sort).lean();
+
 
     if (coords.length > 0) {
-      ads = ads.map(ad => ({
-        ...ad.toObject(),
-        distance: geolib.getDistance(
-          { latitude: coords[1], longitude: coords[0] },
-          { latitude: ad.lat, longitude: ad.lng }
-        )
-      }));
+      ads = ads.map((ad) => {
+        const adLatitude = parseFloat(ad.lat);
+        const adLongitude = parseFloat(ad.lng);
+
+        if (adLatitude === coords[1] && adLongitude === coords[0]) {
+          console.log('kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk');
+          return {
+            ...ad,
+            distance: '1.00',
+          };
+        }
+
+        return {
+          ...ad,
+          distance: geolib.getDistance(
+            { latitude: coords[1], longitude: coords[0] },
+            { latitude: adLatitude, longitude: adLongitude }
+          ),
+        };
+      });
+
+      if (r-s !== 'undefined') {
+        console.log(radius);
+        if (radius === '> 350') {
+          ads = ads.filter((ad) => ad.distance <= 500 * 1000);
+          console.log('hhhhhhhhhhhhhhahhhhhhhhhhahahahahhahaha');
+        } else {
+          console.log('peepee');
+          ads = ads.filter((ad) => ad.distance <= radius * 1000);
+        }
+      }
       ads.sort((a, b) => a.distance - b.distance);
     }
 
     if (idUser) {
-      ads = ads.map(ad => ({
+      ads = ads.map((ad) => ({
         ...ad,
-        isFav: favoriteAds.includes(ad._id.toString())
+        isFav: favoriteAds.includes(ad._id.toString()),
       }));
     }
 
-    ads = ads.map(ad => {
-      return {
-        _id: ad._id,
-        title: ad.title,
-        description: ad.description,
-        country: ad.country,
-        website: ad.website,
-        city: ad.city,
-        lat: ad.lat,
-        lng: ad.lng,
-        price: ad.price,
-        vocal: ad.vocal,
-        category: ad.categoryId,
-        subcategory: ad.subCategoryId,
-        location: ad.location,
-        pictures: ad.pictures,
-        distance: ad.distance || null,
-        isFavorite: ad.isFav || false,
-        createdAt: ad.createdAt,
-        idUser: ad.idUser,
-      };
-    });
 
-    console.log("yabaaaaa", ads);
 
-    return res.status(200).json({ ads });
+    ads = ads.map((ad) => ({
+      _id: ad._id,
+      title: ad.title,
+      description: ad.description,
+      country: ad.country,
+      website: ad.website,
+      city: ad.city,
+      lat: ad.lat,
+      lng: ad.lng,
+      price: ad.price,
+      vocal: ad.vocal,
+      category: ad.categoryId,
+      subcategory: ad.subCategoryId,
+      location: ad.location,
+      pictures: ad.pictures,
+      distance: ad.distance || null,
+      isFavorite: ad.isFav || false,
+      createdAt: ad.createdAt,
+      idUser: ad.idUser,
+    }));
+
+    const totalAdsCount = ads.length;
+    const totalPages = Math.ceil(totalAdsCount / pageSize);
+    console.log(totalAdsCount);
+    console.log(totalPages);
+    console.log('ads length before === ', ads.length);
+
+    ads = ads.slice((page - 1) * pageSize, page * pageSize);
+
+    console.log('ads length === ', ads.length);
+    console.log(totalPages);
+
+    return res.status(200).json({ ads, ads_count: totalAdsCount, totalPages });
   } catch (err) {
     if (err instanceof jwt.TokenExpiredError) {
-      return res.status(200).json({ ads: ads });
+      return res.status(200).json({ ads, ads_count: ads.length });
     }
     console.error(err);
     return res.status(500).json({ error: 'Internal server error', message: err });
@@ -377,10 +424,11 @@ router.post("/adfavorite/:idUser/:idAd", async (req, res) => {
         return res.status(409).json({ message: 'Ad already exists in favorites !' })
       }
       const updatedFavorites = await Favorites.updateOne(
+        { _id: idUser },
         { $addToSet: { ads: idAd } }
       );
       if (updatedFavorites) {
-        return res.status(201).json({ success: true, message: 'Ad has been set to favorites!' });
+        return res.status(200).json({ success: true, message: 'Ad has been set to favorites!' });
       }
     }
   } catch (error) {
@@ -393,16 +441,40 @@ router.post("/adfavorite/:idUser/:idAd", async (req, res) => {
 router.get("/getfavorites/:idUser", async (req, res) => {
   const idUser = req.params.idUser;
   try {
+    const existingUser = await user.findOne({ _id: idUser });
+    coords = [parseFloat(existingUser.lng), parseFloat(existingUser.lat)];
     const existingFavorites = await Favorites.findOne({ _id: idUser }).populate('ads');
     if (!existingFavorites) {
       return res.status(200).json({ success: true, state: false, message: 'User does not have any favorite ads', favorites: [] });
     } else {
-      const favoriteAds = await Ad.find({ _id: { $in: existingFavorites.ads } });
-      const favoritesWithIsFavorite = favoriteAds.map(ad => ({
-        ...ad.toObject(),
+      let favoriteAds = await Ad.find({ _id: { $in: existingFavorites.ads } }).lean();
+      favoriteAds = favoriteAds.map(ad => ({
+        ...ad,
         isFavorite: true
       }));
-      return res.status(200).json({ success: true, state: true, message: 'Favorite ads retrieved successfully', favorites: favoritesWithIsFavorite });
+      if (coords.length > 0) {
+        favoriteAds = favoriteAds.map((ad) => {
+          const adLatitude = parseFloat(ad.lat);
+          const adLongitude = parseFloat(ad.lng);
+
+          if (adLatitude === coords[1] && adLongitude === coords[0]) {
+            return {
+              ...ad,
+              distance: '1.00',
+            };
+          }
+
+          return {
+            ...ad,
+            distance: geolib.getDistance(
+              { latitude: coords[1], longitude: coords[0] },
+              { latitude: adLatitude, longitude: adLongitude }
+            ),
+          };
+        });
+      }
+      console.log(favoriteAds);
+      return res.status(200).json({ success: true, state: true, message: 'Favorite ads retrieved successfully', favorites: favoriteAds });
     }
   } catch (error) {
     console.error(`Error retrieving favorite ads: ${error.message}`);
@@ -443,10 +515,18 @@ router.delete("/deletefavorite/:idUser/:idAd", async (req, res) => {
 
 router.get('/specific', async (req, res) => {
   const id = req.headers.id;
+  const page = parseInt(req.query.page) || 1;
+  const pageSize = 20;
+  console.log(id);
+  console.log(page);
   try {
-    const ad = await Ad.find({ idUser: id });
-    if (ad.length > 0) {
-      return res.status(200).json({ success: true, state: true, ad: ad });
+    let ads = await Ad.find({ idUser: id, state: true });
+    if (ads.length > 0) {
+      const totalAdsCount = ads.length;
+      const totalPages = Math.ceil(totalAdsCount / pageSize);
+      ads = ads.slice((page - 1) * pageSize, page * pageSize);
+      console.log(ads);
+      return res.status(200).json({ success: true, state: true, ads: ads, totalPages });
     } else {
       return res.status(200).json({ success: true, state: false })
     }
@@ -455,5 +535,6 @@ router.get('/specific', async (req, res) => {
     return res.status(500).json({ success: false, error: error });
   }
 })
+
 
 module.exports = router;

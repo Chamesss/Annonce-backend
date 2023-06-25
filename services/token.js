@@ -25,9 +25,11 @@ async function verifyAdmin(req, res, next) {
         const iduser = decoded.id;
         const exisitingUser = await User.findById(iduser);
         if (!exisitingUser){
-            return res.status(500).json({ message: 'corrupted token detected'})
+            return res.status(400).json({ message: 'corrupted token detected'})
         }
-        if (exisitingUser.isAdmin === true){
+        if (exisitingUser.isAdmin === false){
+            return res.status(401).json({ message: 'unauthorized '})
+        } else {
             next();
         }
     } catch (error) {

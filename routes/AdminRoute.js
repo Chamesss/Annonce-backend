@@ -3,7 +3,7 @@ const Ads = require('../models/Ad');
 const Users = require('../models/User');
 const Reclamation = require('../models/Reclamation');
 const router = express.Router();
-const Notification = require('../utils/notification');
+const Notification = require('../services/notification');
 
 
 router.get("/getads", async (req, res) => {

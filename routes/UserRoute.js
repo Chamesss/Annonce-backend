@@ -11,11 +11,11 @@ const geocoder = NodeGeocoder({
   provider: 'openstreetmap',
 });
 const jwt = require('jsonwebtoken');
-const upload = require("../utils/cloudinary");
-const Upload = require('../utils/multer');
-const Token = require('../utils/token');
+const upload = require("../services/cloudinary");
+const Upload = require('../services/multer');
+const Token = require('../services/token');
 const Location = require('../models/location');
-const Notification = require('../utils/notification');
+const Notification = require('../services/notification');
 
 // const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -155,7 +155,7 @@ router.get("/activate/:id", async (req, res) => {
   try {
     const existingUser = await User.findById(id);
     if (!existingUser) {
-      return res.status(500).json({ message: 'Internal error' });
+      return res.status(404).json({ message: 'User not found' });
     }
     if (existingUser.state === true) {
       return res.status(400).json({ message: 'Bad request' });
@@ -185,7 +185,7 @@ router.post("/login", async (req, res) => {
     console.log(email);
     console.log('exisiting ::: ', existingUser);
     if (!existingUser) {
-      return res.status(401).json({ success: false, message: 'Email not found' });
+      return res.status(404).json({ success: false, message: 'Email not found' });
     }
     const isPasswordCorrect = await bcrypt.compare(password, existingUser.password);
     if (!isPasswordCorrect) {

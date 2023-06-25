@@ -1,6 +1,6 @@
 const Category = require("../models/Categoris");
-const upload = require("../utils/cloudinary");
-const Upload = require('../utils/multer');
+const upload = require("../services/cloudinary");
+const Upload = require('../services/multer');
 const router = require("./UserRoute");
 
 
