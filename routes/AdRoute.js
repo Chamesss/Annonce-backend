@@ -181,6 +181,7 @@ router.get('/get', async (req, res) => {
     console.log(coords);
 
     let ads = await Ad.find(filter).sort(sort).lean();
+    console.log('ads length before === ', ads.length);
 
 
     if (coords.length > 0) {
@@ -205,7 +206,7 @@ router.get('/get', async (req, res) => {
         };
       });
 
-      if (r-s !== 'undefined') {
+      if (typeof radius !== 'undefined') {
         console.log(radius);
         if (radius === '> 350') {
           ads = ads.filter((ad) => ad.distance <= 500 * 1000);
@@ -252,7 +253,7 @@ router.get('/get', async (req, res) => {
     const totalPages = Math.ceil(totalAdsCount / pageSize);
     console.log(totalAdsCount);
     console.log(totalPages);
-    console.log('ads length before === ', ads.length);
+
 
     ads = ads.slice((page - 1) * pageSize, page * pageSize);
 
