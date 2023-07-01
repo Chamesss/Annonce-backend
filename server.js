@@ -28,7 +28,7 @@ mongoose.connect(process.env.DB_CONNECTION, { useNewUrlParser: true, useUnifiedT
 app.use(cors({
   credentials: true,
   methods: ["GET", "POST", "DELETE", "PATCH", "PUT"],
-  origin: ['http://localhost:3000', 'http://localhost:4200', 'https://kind-rock-0c75e750f.3.azurestaticapps.net/'],
+  origin: ['http://localhost:3000', 'http://localhost:4200', 'https://kind-rock-0c75e750f.3.azurestaticapps.net', 'http://kind-rock-0c75e750f.3.azurestaticapps.net'],
 }));
 
 app.use(bodyParser.json());
