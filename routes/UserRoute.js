@@ -267,38 +267,29 @@ router.patch("/edituser/:id/:locationId", Upload.single('file'), async (req, res
     const locationId = req.params.locationId;
     const { firstname, lastname, email, oldPassword, newPassword, tel, type, uncheck } = req.body;
 
-    if (uncheck === true) {
-      console.log('im heeeeeeeeeeeeeeeeeeeeere')
-      const existingUser = await User.findOne({ email: email });
-      const encryptedPassword = await bcrypt.hash(newPassword, 10);
-      existingUser.password = encryptedPassword;
-      const updatedUser = await existingUser.save();
-      if (updatedUser) {
-        return res.status(201).json({ success: true, user: updatedUser });
-      }
-    }
-
     const existingUser = await User.findById(userId);
-
-    const isPasswordValid = await bcrypt.compare(oldPassword, existingUser.password);
-    if (!isPasswordValid) {
-      return res.status(401).json({ error: 'Invalid old password' });
-    }
-
     if (!existingUser) {
       return res.status(401).json({ error: 'User not found' });
     }
 
-    if (newPassword.length > 6 && newPassword !== 'undefined') {
+    if (uncheck === true) {
+      const isPasswordValid = await bcrypt.compare(oldPassword, existingUser.password);
+      if (!isPasswordValid) {
+        return res.status(401).json({ error: 'Invalid old password' });
+      }
       const encryptedPassword = await bcrypt.hash(newPassword, 10);
       existingUser.password = encryptedPassword;
+      const updatedUser = await existingUser.save();
+      if (updatedUser) {
+        return res.status(201).json({ success: true, type:'password'});
+      }
     }
 
     if (email.length > 0) {
       if (email !== existingUser.email) {
         const exisitingEmail = await User.findOne({ email: email });
         if (exisitingEmail) {
-          return res.status(401).json({ error: 'Email already existing' });
+          return res.status(401).json({status:false, error: 'Email already existing' });
         } else {
           existingUser.email = email;
           existingUser.status = false;
@@ -394,7 +385,7 @@ router.delete("/deleteuser/:id", async (req, res) => {
     }
     const passwordMatch = await bcrypt.compare(password, existingUser.password);
     if (!passwordMatch) {
-      return res.status(401).json({status:false, message: 'Invalid password' });
+      return res.status(401).json({ status: false, message: 'Invalid password' });
     }
     await existingUser.deleteOne();
 
@@ -416,9 +407,9 @@ router.post("/reclamation/:iduser/:idad", async (req, res) => {
     const info = req.body.info;
     console.log(info);
     const rec = new Reclamation({
-      userId:iduser,
-      adId:idad,
-      info:info,
+      userId: iduser,
+      adId: idad,
+      info: info,
     })
     const isSaved = await rec.save();
     if (isSaved) {
